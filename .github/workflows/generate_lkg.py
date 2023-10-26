@@ -89,7 +89,8 @@ def get_reqs(metadata: CollectionMetadata):
                 reverse_map[(file_parts.py_version, file_parts.os)].add(pkg_version)
 
         # each python version and os maps to a single package version
-        assert all([len(reverse_map[k]) == 1 for k in reverse_map])
+        assert all([len(reverse_map[k]) == 1 for k in reverse_map]
+                   ), f"Multiple package versions for {req}: {reqs[req]}"
 
         for pkg_version in reqs[req]:
             # break down first by python version
@@ -125,7 +126,7 @@ def make_req_files(requirements_directory):
         for line in open(os.path.join(requirements_directory, file), 'r'):
             # Regex to match requirements file names as stored by ci.yml
             file_regex = r'''^((tests-(macos|ubuntu|windows)-latest-(3\.\d+)-([^-]+)) # test filename
-                              |(notebooks-(3\.\d+)-(.*)))-requirements.txt$'''        # notebook filename
+                              |(notebooks-(.*)-(3\.\d+)))-requirements.txt$'''        # notebook filename
             req_regex = r'^(.*?)==(.*)$'  # parses requirements from pip freeze results
             match = re.search(req_regex, line)
             file_match = re.search(file_regex, file, flags=re.VERBOSE)
@@ -139,8 +140,8 @@ def make_req_files(requirements_directory):
                 test_metadata.reqs[match.group(1)][match.group(2)].add(file_parts)
             elif file_match.group(6):
                 file_parts = FileParts(os='ubuntu',
-                                       py_version=packaging.version.parse(file_match.group(7)),
-                                       type=file_match.group(8))
+                                       py_version=packaging.version.parse(file_match.group(8)),
+                                       type=file_match.group(7))
                 notebook_metadata.all_file_parts.add(file_parts)
                 notebook_metadata.all_py_versions.add(file_parts.py_version)
                 notebook_metadata.py_version_oses[file_parts.py_version].add(file_parts.os)
