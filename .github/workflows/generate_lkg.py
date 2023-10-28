@@ -88,50 +88,59 @@ def get_reqs(metadata: CollectionMetadata):
             for file_parts in reqs[req][pkg_version]:
                 reverse_map[(file_parts.py_version, file_parts.os)].add(pkg_version)
 
-        # each python version and os maps to a single package version
-        assert all([len(reverse_map[k]) == 1 for k in reverse_map]
-                   ), f"Multiple package versions for {req}: {reqs[req]}"
+        if not all([len(reverse_map[k]) == 1 for k in reverse_map]):
+            # warn about multiple package versions
+            from warnings import warn
+            for k in reverse_map:
+                if len(reverse_map[k]) > 1:
+                    warn(f"Multiple package versions for {req}: {(k, reverse_map[k])}; defaulting to lowest version")
+                    min_ver = min(reverse_map[k], key=packaging.version.parse)
+                    for pkg_version in reqs[req]:
+                        for file_parts in list(reqs[req][pkg_version]):
+                            if file_parts.os == k[1] and pkg_version != min_ver:
+                                reqs[req][pkg_version].remove(file_parts)
+                            
 
         for pkg_version in reqs[req]:
             # break down first by python version
-            py_version_map = defaultdict(set)  # python version -> os set
+            py_version_map=defaultdict(set)  # python version -> os set
             for file_parts in reqs[req][pkg_version]:
                 py_version_map[file_parts.py_version].add(file_parts.os)
 
-            os_constraints = defaultdict(list)  # os constraint string -> python version list
+            os_constraints=defaultdict(list)  # os constraint string -> python version list
             for py_version in py_version_map:
                 os_constraints[os_constraint(py_version_map[py_version],
                                              py_version_oses[py_version])].append(py_version)
 
             for os_constraint_str in os_constraints:
-                py_version_constraint_str = version_range(os_constraints[os_constraint_str], metadata.all_py_versions)
-                combined_constraint_str = combined_constraint(os_constraint_str, py_version_constraint_str)
+                py_version_constraint_str=version_range(os_constraints[os_constraint_str], metadata.all_py_versions)
+                combined_constraint_str=combined_constraint(os_constraint_str, py_version_constraint_str)
                 all_constraints.append(
                     f"{req}=={pkg_version}; {combined_constraint_str}" if combined_constraint_str
                     else f"{req}=={pkg_version}")
 
-    req_str = '\n'.join(sorted(all_constraints))
+    req_str='\n'.join(sorted(all_constraints))
     return req_str
 
 
 def make_req_files(requirements_directory):
 
-    files = os.listdir(requirements_directory)
+    files=os.listdir(requirements_directory)
 
-    test_metadata = CollectionMetadata(set(), defaultdict(set), set(), defaultdict(lambda: defaultdict(set)))
-    notebook_metadata = CollectionMetadata(set(), defaultdict(set), set(), defaultdict(lambda: defaultdict(set)))
+    test_metadata=CollectionMetadata(set(), defaultdict(set), set(), defaultdict(lambda: defaultdict(set)))
+    notebook_metadata=CollectionMetadata(set(), defaultdict(set), set(), defaultdict(lambda: defaultdict(set)))
 
     for file in files:
         # read each line of the file
         for line in open(os.path.join(requirements_directory, file), 'r'):
             # Regex to match requirements file names as stored by ci.yml
-            file_regex = r'''^((tests-(macos|ubuntu|windows)-latest-(3\.\d+)-([^-]+)) # test filename
+            file_regex=r'''^((tests-(macos|ubuntu|windows)-latest-(3\.\d+)-([^-]+)) # test filename
                               |(notebooks-(.*)-(3\.\d+)))-requirements.txt$'''        # notebook filename
-            req_regex = r'^(.*?)==(.*)$'  # parses requirements from pip freeze results
-            match = re.search(req_regex, line)
-            file_match = re.search(file_regex, file, flags=re.VERBOSE)
+            req_regex=r'^(.*?)==(.*)$'  # parses requirements from pip freeze results
+            match=re.search(req_regex, line)
+            file_match=re.search(file_regex, file, flags=re.VERBOSE)
             if file_match.group(2):  # we matched the test file pattern
-                file_parts = FileParts(os=file_match.group(3),
+                file_parts=FileParts(os=file_match.group(3),
                                        py_version=packaging.version.parse(file_match.group(4)),
                                        type=file_match.group(5))
                 test_metadata.all_file_parts.add(file_parts)
@@ -139,7 +148,7 @@ def make_req_files(requirements_directory):
                 test_metadata.py_version_oses[file_parts.py_version].add(file_parts.os)
                 test_metadata.reqs[match.group(1)][match.group(2)].add(file_parts)
             elif file_match.group(6):
-                file_parts = FileParts(os='ubuntu',
+                file_parts=FileParts(os='ubuntu',
                                        py_version=packaging.version.parse(file_match.group(8)),
                                        type=file_match.group(7))
                 notebook_metadata.all_file_parts.add(file_parts)
@@ -151,11 +160,11 @@ def make_req_files(requirements_directory):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Generate requirements files for CI')
+    parser=argparse.ArgumentParser(description='Generate requirements files for CI')
     parser.add_argument('requirements_directory', type=str, help='Directory containing requirements files')
     parser.add_argument('output_directory', type=str, help='Directory to write requirements files to')
-    args = parser.parse_args()
-    test_reqs, notebook_reqs = make_req_files(args.requirements_directory)
+    args=parser.parse_args()
+    test_reqs, notebook_reqs=make_req_files(args.requirements_directory)
     with open(os.path.join(args.output_directory, 'lkg.txt'), 'w') as f:
         f.write(test_reqs)
     with open(os.path.join(args.output_directory, 'lkg-notebook.txt'), 'w') as f:
