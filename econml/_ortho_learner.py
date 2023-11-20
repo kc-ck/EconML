@@ -206,14 +206,14 @@ def _crossfit(model: ModelSelector, folds, use_ray, ray_remote_fun_option, *args
     model_list = []
 
     kwargs = filter_none_kwargs(**kwargs)
-    model.train(True, *args, **kwargs)
+    if (model.needs_fit):
+        model.train(True, *args, **kwargs)
 
     calculate_scores = hasattr(model, 'score')
     # remove None arguments
 
     if folds is None:  # skip crossfitting
         model_list.append(clone(model, safe=False))
-        model_list[0].train(True, *args, **kwargs)
         model_list[0].train(False, *args, **kwargs)  # fit the selected model
         nuisances = model_list[0].predict(*args, **kwargs)
         scores = model_list[0].score(*args, **kwargs) if calculate_scores else None
